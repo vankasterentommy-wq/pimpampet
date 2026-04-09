@@ -176,16 +176,27 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
 
 /* HOST SETUP */
 .room-code-display {
-  font-size: clamp(4rem, 14vw, 9rem);
+  font-size: clamp(3.5rem, 11vw, 6.5rem);
   font-weight: 900;
-  letter-spacing: 0.15em;
-  color: var(--neon-yellow);
+  font-family: 'Courier New', 'Consolas', monospace;
+  letter-spacing: 0.3em;
+  padding-left: 0.3em; /* compensate for letter-spacing on last char */
+  color: #fff;
   text-shadow:
-    0 0 20px var(--neon-yellow),
-    0 0 40px var(--neon-yellow),
-    0 0 60px var(--neon-pink);
-  margin: 10px 0 5px 0;
-  text-align: center;
+    0 0 4px #fff,
+    0 0 12px var(--neon-yellow),
+    0 0 25px var(--neon-yellow),
+    0 0 45px rgba(255, 242, 0, 0.6);
+  margin: 15px 0 10px 0;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  padding-right: 30px;
+  padding-left: calc(30px + 0.3em);
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--neon-yellow);
+  border-radius: 18px;
+  display: inline-block;
+  box-shadow: 0 0 30px rgba(255, 242, 0, 0.4), inset 0 0 20px rgba(255, 242, 0, 0.1);
 }
 .settings { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 15px 0; }
 @media (min-width: 500px) { .settings { grid-template-columns: 1fr 1fr 1fr; } }
