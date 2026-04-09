@@ -161,12 +161,43 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
   gap: 15px;
   flex-wrap: wrap;
   justify-content: center;
-  padding: 15px;
+  padding: 15px 20px;
   background: rgba(0, 0, 0, 0.4);
   border-radius: 15px;
   border: 1px solid var(--neon-purple);
-  width: 100%;
-  max-width: 1200px;
+  width: auto;
+  max-width: 95vw;
+}
+.round-bar {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 50px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.15em;
+  font-size: 0.9rem;
+}
+.round-bar .round-num { color: var(--neon-yellow); text-shadow: 0 0 10px var(--neon-yellow); }
+.round-bar .round-target { color: var(--neon-cyan); text-shadow: 0 0 10px var(--neon-cyan); }
+.round-bar .end-game-btn {
+  background: transparent;
+  border: 1px solid var(--neon-pink);
+  color: var(--neon-pink);
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.round-bar .end-game-btn:hover {
+  background: var(--neon-pink);
+  color: #fff;
+  box-shadow: 0 0 15px var(--neon-pink);
 }
 .score-card {
   background: rgba(26, 5, 51, 0.8);
@@ -209,9 +240,9 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
   to { box-shadow: 0 0 25px #ffaa00; }
 }
 
-.game-main { display: flex; flex-direction: column; align-items: center; gap: 25px; flex: 1; }
+.game-main { display: flex; flex-direction: column; align-items: center; gap: 18px; flex: 1; }
 
-.wheel-container { position: relative; width: min(380px, 75vw); height: min(380px, 75vw); }
+.wheel-container { position: relative; width: min(320px, 65vw); height: min(320px, 65vw); }
 .wheel {
   width: 100%;
   height: 100%;
@@ -242,11 +273,15 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
 .letter-display {
   font-size: clamp(5rem, 16vw, 11rem);
   font-weight: 900;
-  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 20px var(--neon-cyan));
+  font-family: 'Arial Black', 'Impact', sans-serif;
+  color: #fff;
+  text-shadow:
+    0 0 10px #fff,
+    0 0 20px var(--neon-cyan),
+    0 0 40px var(--neon-cyan),
+    0 0 60px var(--neon-pink),
+    0 0 80px var(--neon-pink);
+  line-height: 1;
 }
 .wheel-pointer {
   position: absolute;
@@ -428,6 +463,11 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
 
 <!-- ============ GAME SCREEN ============ -->
 <div class="screen" id="game-screen">
+  <div class="round-bar">
+    <span class="round-num">ROUND <span id="round-num">1</span></span>
+    <span class="round-target">FIRST TO <span id="round-target">1000</span></span>
+    <button class="end-game-btn" id="end-game-btn">END GAME</button>
+  </div>
   <div class="scoreboard" id="scoreboard"></div>
 
   <div class="game-main">
@@ -505,10 +545,12 @@ let state = {
   currentCategory: null,
   isRareLetter: false,
   roundActive: false,
+  acceptingAnswers: false,
   timerInterval: null,
   roundStartTime: 0,
   usedCategories: [],
   wheelRotation: 0,
+  round: 0,
 };
 
 // ============================================================
@@ -604,6 +646,8 @@ function showScreen(id) {
 function startGame() {
   state.players.forEach(p => { p.score = 0; p.streak = 0; p.scoredThisRound = false; });
   state.usedCategories = [];
+  state.round = 0;
+  document.getElementById('round-target').textContent = state.targetScore;
   showScreen('game-screen');
   renderScoreboard();
   resetRound();
@@ -628,6 +672,9 @@ function resetRound() {
   state.currentLetter = null;
   state.currentCategory = null;
   state.roundActive = false;
+  state.acceptingAnswers = false;
+  state.round++;
+  document.getElementById('round-num').textContent = state.round;
   document.getElementById('letter-display').textContent = '?';
   document.getElementById('category-area').innerHTML = '';
   document.getElementById('timer-ring').style.display = 'none';
@@ -687,6 +734,7 @@ function revealCategory() {
 function startTimer() {
   state.roundStartTime = Date.now();
   state.roundActive = true;
+  state.acceptingAnswers = true;
   state.players.forEach(p => p.scoredThisRound = false);
 
   const ring = document.getElementById('timer-ring');
@@ -717,19 +765,22 @@ function startTimer() {
 function timesUp() {
   if (!state.roundActive) return;
   state.roundActive = false;
+  // acceptingAnswers stays TRUE — host can still award if someone shouted at the buzzer
   soundBuzzer();
-  document.getElementById('player-buttons').innerHTML = '';
   document.getElementById('action-buttons').innerHTML = `
     <div style="text-align:center;">
-      <div style="font-size:2rem; color:var(--neon-pink); text-shadow:0 0 20px var(--neon-pink); margin-bottom:15px;">⏰ TIME'S UP!</div>
+      <div style="font-size:1.6rem; color:var(--neon-pink); text-shadow:0 0 20px var(--neon-pink); margin-bottom:10px;">⏰ TIME'S UP — last call!</div>
       <button class="btn btn-cyan btn-big" id="next-btn">NEXT ROUND →</button>
     </div>
   `;
+  document.getElementById('next-btn').addEventListener('click', endRound);
+}
+
+function endRound() {
+  state.acceptingAnswers = false;
   state.players.forEach(p => { if (!p.scoredThisRound) p.streak = 0; });
   renderScoreboard();
-  document.getElementById('next-btn').addEventListener('click', () => {
-    if (!checkWinner()) resetRound();
-  });
+  if (!checkWinner()) resetRound();
 }
 
 function showPlayerButtons() {
@@ -748,7 +799,8 @@ function showPlayerButtons() {
 }
 
 function awardPoint(playerId) {
-  if (!state.roundActive) return;
+  if (!state.acceptingAnswers) return;
+  state.acceptingAnswers = false;
   state.roundActive = false;
   clearInterval(state.timerInterval);
 
@@ -756,11 +808,12 @@ function awardPoint(playerId) {
   if (!player) return;
 
   const elapsed = (Date.now() - state.roundStartTime) / 1000;
+  const wasLate = elapsed > state.roundTime;
   let points = 100;
-  let breakdown = ['+100 base'];
+  let breakdown = wasLate ? ['+100 buzzer-beater'] : ['+100 base'];
 
-  if (elapsed < 3) { points += 100; breakdown.push('+100 LIGHTNING'); }
-  else if (elapsed < 6) { points += 50; breakdown.push('+50 fast'); }
+  if (!wasLate && elapsed < 3) { points += 100; breakdown.push('+100 LIGHTNING'); }
+  else if (!wasLate && elapsed < 6) { points += 50; breakdown.push('+50 fast'); }
 
   if (state.isRareLetter) { points *= 2; breakdown.push('×2 rare letter'); }
 
@@ -804,7 +857,8 @@ function awardPoint(playerId) {
 }
 
 function skipRound() {
-  if (!state.roundActive) return;
+  if (!state.acceptingAnswers) return;
+  state.acceptingAnswers = false;
   state.roundActive = false;
   clearInterval(state.timerInterval);
   state.players.forEach(p => { p.streak = 0; });
@@ -829,6 +883,24 @@ function showWinner(winner) {
 }
 
 document.getElementById('play-again-btn').addEventListener('click', () => location.reload());
+
+document.getElementById('end-game-btn').addEventListener('click', () => {
+  if (confirm('End the game and return to setup?')) {
+    clearInterval(state.timerInterval);
+    location.reload();
+  }
+});
+
+// Audio: ensure context is created/resumed on first user gesture (iOS Safari requirement)
+function unlockAudio() {
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+document.body.addEventListener('click', unlockAudio, { once: false });
+document.body.addEventListener('touchstart', unlockAudio, { once: false });
+
+// Auto-focus the player input on load
+window.addEventListener('load', () => playerNameInput.focus());
 
 // ============================================================
 // CONFETTI
