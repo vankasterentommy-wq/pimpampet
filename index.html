@@ -1255,6 +1255,7 @@ async function hostSpin() {
     state: 'spinning',
     buzzedPlayer: null,
     wrongBuzzers: null,
+    hasBonus: null,
     round: newRound,
   });
   local.prevBuzzedPlayer = null;
@@ -1287,10 +1288,11 @@ async function hostSpin() {
 }
 
 function showHostRevealing(letter, category, isRare) {
+  const hasBonus = local.cachedRoom && local.cachedRoom.hasBonus;
   document.getElementById('category-area').innerHTML = `
     <div class="category-card">
       <div class="category-label">CATEGORY</div>
-      <div class="category-text">${escapeHtml(category)}${isRare ? '<span class="bonus-badge">2× RARE!</span>' : ''}</div>
+      <div class="category-text">${escapeHtml(category)}${isRare ? '<span class="bonus-badge">2× RARE!</span>' : ''}${hasBonus ? '<span class="bonus-badge" style="background:var(--neon-green); color:#000;">+50 CAREFUL</span>' : ''}</div>
     </div>
   `;
   document.getElementById('action-buttons').innerHTML = `
@@ -1376,7 +1378,7 @@ function showHostBuzzed(room) {
   document.getElementById('judge-correct').addEventListener('click', () => hostJudge(true));
   document.getElementById('judge-wrong').addEventListener('click', () => hostJudge(false));
 
-  // Answer timer countdown
+  // Answer timer countdown — visual only, host MUST manually judge
   let answerLeft = room.answerTime || 5;
   if (local.hostAnswerInterval) clearInterval(local.hostAnswerInterval);
   local.hostAnswerInterval = setInterval(() => {
@@ -1385,7 +1387,16 @@ function showHostBuzzed(room) {
     if (el) el.textContent = Math.max(0, answerLeft);
     if (answerLeft <= 0) {
       clearInterval(local.hostAnswerInterval);
-      hostJudge(false); // auto-wrong on timeout
+      // Visual: timer expired, prompt host to judge
+      if (el) {
+        el.style.color = 'var(--neon-pink)';
+        el.textContent = '⏰';
+      }
+      const label = document.querySelector('.buzzed-label');
+      if (label) {
+        label.textContent = '⚠️  JUDGE NOW  ⚠️';
+        label.style.color = 'var(--neon-pink)';
+      }
     }
   }, 1000);
 }
@@ -1405,6 +1416,7 @@ async function hostJudge(correct) {
     if (elapsed < 3) { points += 100; breakdown.push('+100 LIGHTNING'); }
     else if (elapsed < 6) { points += 50; breakdown.push('+50 fast'); }
     if (room.isRareLetter) { points *= 2; breakdown.push('×2 rare letter'); }
+    if (room.hasBonus) { points += 50; breakdown.push('+50 CAREFUL bonus'); }
 
     const newStreak = (player.streak || 0) + 1;
     if (newStreak >= 5) { points *= 3; breakdown.push('×3 ON FIRE'); }
@@ -1439,39 +1451,100 @@ async function hostJudge(correct) {
   } else {
     // === WRONG ANSWER ===
     soundBuzzer();
-    const updates = {};
-    updates[`players/${buzzedId}/streak`] = 0;
-    updates['buzzedPlayer'] = null;
-    updates[`wrongBuzzers/${buzzedId}`] = true;
 
-    // Check remaining time
-    const elapsed = (Date.now() - room.roundStartTime) / 1000;
-    const remaining = (room.roundTime || 30) - elapsed;
+    // Check if everybody is now locked
+    const newWrongCount = Object.keys(room.wrongBuzzers || {}).length + 1;
+    const totalPlayers = Object.keys(room.players || {}).length;
 
-    if (remaining > 1) {
-      // Resume revealing state, others can buzz
-      updates['state'] = 'revealing';
-      await db.ref(`rooms/${local.roomCode}`).update(updates);
-      local.prevBuzzedPlayer = null;
-      showHostRevealing(room.currentLetter, room.currentCategory, room.isRareLetter);
-      hostStartTimer(elapsed);
-    } else {
-      // Time's basically up, end the round
-      updates['state'] = 'roundEnd';
-      Object.keys(room.players || {}).forEach(id => {
-        if (id !== buzzedId) updates[`players/${id}/streak`] = (room.players[id].streak || 0); // keep existing
-      });
+    if (newWrongCount >= totalPlayers) {
+      // Everyone wrong → end round, no more attempts
+      const updates = {
+        state: 'roundEnd',
+        buzzedPlayer: null,
+        [`wrongBuzzers/${buzzedId}`]: true,
+        [`players/${buzzedId}/streak`]: 0,
+      };
       await db.ref(`rooms/${local.roomCode}`).update(updates);
       local.prevBuzzedPlayer = null;
       document.getElementById('action-buttons').innerHTML = `
         <div style="text-align:center;">
-          <div style="font-size:1.6rem; color:var(--neon-pink); margin-bottom:15px;">❌ Wrong + time's up</div>
+          <div style="font-size:1.6rem; color:var(--neon-pink); margin-bottom:15px;">❌ Nobody got it right!</div>
           <button class="btn btn-cyan btn-big" id="next-btn" style="max-width:300px;">NEXT ROUND →</button>
         </div>
       `;
       document.getElementById('next-btn').addEventListener('click', hostNextRound);
+      return;
     }
+
+    // Otherwise: respin a NEW letter (same category), lock wrong player, set bonus
+    await hostRespin(buzzedId);
   }
+}
+
+async function hostRespin(wrongPlayerId) {
+  const room = local.cachedRoom;
+
+  // Mark player as locked + reset their streak + clear buzzer + set bonus flag + state spinning
+  await db.ref(`rooms/${local.roomCode}`).update({
+    state: 'spinning',
+    buzzedPlayer: null,
+    hasBonus: true,
+    [`wrongBuzzers/${wrongPlayerId}`]: true,
+    [`players/${wrongPlayerId}/streak`]: 0,
+  });
+  local.prevBuzzedPlayer = null;
+
+  // Pick a NEW letter — different from current one
+  const useRare = Math.random() < 0.15;
+  const pool = useRare ? RARE_LETTERS : LETTERS;
+  let newLetter;
+  do {
+    newLetter = pool[Math.floor(Math.random() * pool.length)];
+  } while (newLetter === room.currentLetter && pool.length > 1);
+
+  // Quick re-spin animation (1.5s)
+  const wheel = document.getElementById('wheel');
+  const originalTransition = wheel.style.transition;
+  wheel.style.transition = 'transform 1.5s cubic-bezier(0.17, 0.67, 0.16, 0.99)';
+  local.wheelRotation += 360 * (3 + Math.random() * 2);
+  wheel.style.transform = `rotate(${local.wheelRotation}deg)`;
+
+  document.getElementById('action-buttons').innerHTML = `
+    <div style="text-align:center; padding:15px;">
+      <div style="font-size:1.6rem; color:var(--neon-pink); margin-bottom:8px;">❌ WRONG! New letter coming...</div>
+      <div style="font-size:1rem; color:var(--neon-green); letter-spacing:0.15em; text-shadow:0 0 10px var(--neon-green);">+50 BONUS for next correct answer!</div>
+    </div>
+  `;
+
+  let ticks = 0;
+  const tickInt = setInterval(() => { soundTick(); if (++ticks > 9) clearInterval(tickInt); }, 150);
+
+  await new Promise(r => setTimeout(r, 1500));
+  clearInterval(tickInt);
+  soundDing();
+  flashScreen();
+
+  // Restore original transition
+  wheel.style.transition = originalTransition;
+
+  document.getElementById('letter-display').textContent = newLetter;
+
+  // Update DB with new letter + reset round timer (fresh race)
+  await db.ref(`rooms/${local.roomCode}`).update({
+    state: 'revealing',
+    currentLetter: newLetter,
+    isRareLetter: useRare,
+    roundStartTime: ServerValue.TIMESTAMP,
+    // category stays the same
+  });
+
+  // Update local cache so showHostRevealing reads the new values
+  local.cachedRoom.currentLetter = newLetter;
+  local.cachedRoom.isRareLetter = useRare;
+  local.cachedRoom.hasBonus = true;
+
+  showHostRevealing(newLetter, room.currentCategory, useRare);
+  hostStartTimer();
 }
 
 async function hostNextRound() {
@@ -1489,6 +1562,7 @@ async function hostNextRound() {
     currentCategory: null,
     buzzedPlayer: null,
     wrongBuzzers: null,
+    hasBonus: null,
     roundStartTime: null,
     isRareLetter: false,
   });
@@ -1648,11 +1722,14 @@ function renderPlayerWaiting(room) {
 }
 
 function renderPlayerSpinning(room) {
+  const isRespin = room.hasBonus;
+  const wrongBuzzers = room.wrongBuzzers || {};
+  const iAmLocked = !!wrongBuzzers[local.myId];
   document.getElementById('player-main').innerHTML = `
     <div class="player-status">
       <div class="status-icon" style="animation: titleGlow 0.5s ease infinite;">🎰</div>
-      <div class="status-text">SPINNING...</div>
-      <div class="status-sub">Get your finger ready!</div>
+      <div class="status-text">${isRespin ? 'NEW LETTER!' : 'SPINNING...'}</div>
+      <div class="status-sub">${iAmLocked ? "❌ You're locked out this round" : (isRespin ? '+50 BONUS for whoever gets it right!' : 'Get your finger ready!')}</div>
     </div>
     ${renderMiniScoreboard(room)}
   `;
@@ -1679,7 +1756,7 @@ function renderPlayerBuzzer(room) {
   document.getElementById('player-main').innerHTML = `
     <div class="reveal-info">
       <div class="reveal-letter">${room.currentLetter || '?'}</div>
-      <div class="reveal-category">${escapeHtml(room.currentCategory)}${room.isRareLetter ? '<span class="bonus-badge">2×</span>' : ''}</div>
+      <div class="reveal-category">${escapeHtml(room.currentCategory)}${room.isRareLetter ? '<span class="bonus-badge">2×</span>' : ''}${room.hasBonus ? '<span class="bonus-badge" style="background:var(--neon-green); color:#000;">+50!</span>' : ''}</div>
     </div>
     ${buzzerHtml}
   `;
