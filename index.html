@@ -252,14 +252,15 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
     var(--neon-pink), var(--neon-purple), var(--neon-cyan),
     var(--neon-green), var(--neon-yellow), var(--neon-pink)
   );
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
   box-shadow: 0 0 60px rgba(255, 45, 149, 0.6), inset 0 0 60px rgba(0, 0, 0, 0.5);
   transition: transform 4s cubic-bezier(0.17, 0.67, 0.16, 0.99);
 }
 .wheel-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 70%;
   height: 70%;
   border-radius: 50%;
@@ -269,6 +270,7 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
   justify-content: center;
   border: 4px solid white;
   box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.2);
+  z-index: 5;
 }
 .letter-display {
   font-size: clamp(5rem, 16vw, 11rem);
@@ -473,10 +475,9 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
   <div class="game-main">
     <div class="wheel-container">
       <div class="wheel-pointer"></div>
-      <div class="wheel" id="wheel">
-        <div class="wheel-inner">
-          <div class="letter-display" id="letter-display">?</div>
-        </div>
+      <div class="wheel" id="wheel"></div>
+      <div class="wheel-inner">
+        <div class="letter-display" id="letter-display">?</div>
       </div>
     </div>
 
@@ -510,24 +511,35 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
 // CATEGORIES — universal + Filipino flavor 🇵🇭
 // ============================================================
 const CATEGORIES = [
-  "An animal","A fruit","A vegetable","A country","A city","A movie title",
-  "A famous person","A sport","A musical instrument","A color","A piece of clothing",
-  "Something in the kitchen","Something at school","A profession","A car brand",
-  "A type of food","A drink","A board game","A video game","A cartoon character",
-  "A superhero","A Disney movie","A song title","A band or artist","A book title",
-  "A mobile app","A type of weather","A body part","A type of bird","A flower",
-  "A tree","A hobby","A dance move","A holiday","A breakfast food","A dessert",
-  "A pizza topping","An ice cream flavor","A language","A capital city","An island",
-  "A type of dog","Something cold","Something hot","Something round","Something soft",
-  "Something at the beach","Something in the bathroom","Something in your bag",
-  "A reason to be late","A type of shoe","A wild animal","A sea creature","An insect",
-  "A YouTube channel","A celebrity first name","A boy's name","A girl's name",
-  "A type of car","Something in space","A historical figure","A type of cheese",
-  // Filipino flavor
-  "A Filipino dish","A Filipino island or province","A Filipino celebrity",
-  "A Filipino city","A Tagalog word","A Filipino snack","An OPM artist",
-  "A Filipino actor or actress","Something at a Filipino fiesta",
-  "A Filipino dessert","A Filipino fruit","A street food in Manila",
+  // People (simple)
+  "Boy name", "Girl name", "Singer", "Actor", "Famous person",
+  // Animals
+  "Animal", "Wild animal", "Pet", "Farm animal", "Sea animal",
+  "Bird", "Fish", "Insect", "Big animal", "Small animal",
+  // Food & drink
+  "Food", "Fruit", "Vegetable", "Drink", "Dessert", "Snack",
+  "Ice cream flavor", "Pizza topping", "Breakfast food", "Candy",
+  "Restaurant", "Cold drink", "Hot food",
+  // Places
+  "Country", "City", "Capital city", "Island",
+  // Everyday objects
+  "Color", "Clothes", "Shoe", "Toy", "Game",
+  "Kitchen thing", "Bathroom thing", "Bedroom thing",
+  "School thing", "Thing in your bag",
+  // Entertainment
+  "Movie", "Song", "Cartoon", "Superhero", "Disney character",
+  "App", "YouTube channel", "Video game",
+  // Nature & body
+  "Flower", "Tree", "Body part", "Weather word",
+  // Simple descriptive
+  "Something red", "Something yellow", "Something blue",
+  "Something round", "Something soft", "Something cold", "Something hot",
+  // Other simple
+  "Sport", "Job", "Car brand", "Phone brand",
+  // Filipino flavor 🇵🇭
+  "Filipino food", "Filipino fruit", "Filipino snack", "Filipino dessert",
+  "Filipino drink", "Filipino island", "Filipino city",
+  "Filipino actor", "Filipino singer", "Tagalog word",
 ];
 
 const LETTERS = "ABCDEFGHIJKLMNOPRSTUW".split("");
