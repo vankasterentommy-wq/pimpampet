@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIM PAM PET — Arcade Edition</title>
+<style>
+:root {
+  --bg-1: #0a0118;
+  --bg-2: #1a0533;
+  --neon-pink: #ff2d95;
+  --neon-cyan: #00f0ff;
+  --neon-purple: #b537f2;
+  --neon-yellow: #fff200;
+  --neon-green: #39ff14;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  background: radial-gradient(ellipse at top, var(--bg-2), var(--bg-1));
+  color: #fff;
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(181, 55, 242, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(181, 55, 242, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridMove 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes gridMove {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(50px, 50px); }
+}
+.screen { position: relative; z-index: 1; min-height: 100vh; padding: 20px; display: none; }
+.screen.active { display: flex; flex-direction: column; align-items: center; }
+#game-screen.active { gap: 20px; }
+#setup-screen.active, #winner-screen.active { justify-content: center; }
+
+.title {
+  font-size: clamp(3rem, 10vw, 8rem);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan), var(--neon-purple));
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: titleGlow 3s ease-in-out infinite, gradientShift 4s ease infinite;
+  margin-bottom: 10px;
+  text-align: center;
+}
+@keyframes titleGlow {
+  0%, 100% { filter: drop-shadow(0 0 20px var(--neon-pink)); }
+  50% { filter: drop-shadow(0 0 40px var(--neon-cyan)); }
+}
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.subtitle {
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+  color: var(--neon-cyan);
+  letter-spacing: 0.3em;
+  margin-bottom: 40px;
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+.setup-card {
+  background: rgba(26, 5, 51, 0.6);
+  backdrop-filter: blur(10px);
+  border: 2px solid var(--neon-purple);
+  border-radius: 20px;
+  padding: 30px;
+  width: min(600px, 90vw);
+  box-shadow: 0 0 40px rgba(181, 55, 242, 0.4);
+}
+.input-row { display: flex; gap: 10px; margin-bottom: 20px; }
+input[type="text"], input[type="number"] {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 10px;
+  padding: 15px;
+  color: white;
+  font-size: 1.2rem;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s;
+  width: 100%;
+}
+input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pink); }
+
+.btn {
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+  border: none;
+  border-radius: 10px;
+  padding: 15px 30px;
+  color: white;
+  font-size: 1.2rem;
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(255, 45, 149, 0.5);
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 0 30px rgba(255, 45, 149, 0.8); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-cyan { background: linear-gradient(135deg, var(--neon-cyan), #0099cc); box-shadow: 0 0 20px rgba(0, 240, 255, 0.5); }
+.btn-green { background: linear-gradient(135deg, var(--neon-green), #2ecc71); box-shadow: 0 0 20px rgba(57, 255, 20, 0.5); color: #000; }
+.btn-yellow { background: linear-gradient(135deg, var(--neon-yellow), #f39c12); box-shadow: 0 0 20px rgba(255, 242, 0, 0.5); color: #000; }
+.btn-big { font-size: 2rem; padding: 25px 50px; border-radius: 15px; }
+
+.player-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; min-height: 60px; }
+.player-chip {
+  background: rgba(0, 240, 255, 0.15);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 50px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  animation: chipIn 0.3s ease;
+}
+@keyframes chipIn {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.player-chip .avatar { font-size: 1.5rem; }
+.player-chip .remove {
+  background: var(--neon-pink);
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.settings { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+.setting label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--neon-cyan);
+  margin-bottom: 5px;
+  letter-spacing: 0.1em;
+}
+
+.scoreboard {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 15px;
+  border: 1px solid var(--neon-purple);
+  width: 100%;
+  max-width: 1200px;
+}
+.score-card {
+  background: rgba(26, 5, 51, 0.8);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 15px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 180px;
+  transition: all 0.3s;
+  position: relative;
+}
+.score-card.leader { border-color: var(--neon-yellow); box-shadow: 0 0 20px var(--neon-yellow); }
+.score-card.score-pop { animation: scorePop 0.6s ease; }
+@keyframes scorePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); box-shadow: 0 0 50px var(--neon-green); }
+  100% { transform: scale(1); }
+}
+.score-card .avatar { font-size: 2rem; }
+.score-card .info { flex: 1; }
+.score-card .name { font-size: 1rem; font-weight: bold; }
+.score-card .points { font-size: 1.5rem; color: var(--neon-yellow); text-shadow: 0 0 10px var(--neon-yellow); }
+.score-card .streak {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: linear-gradient(135deg, #ff0000, #ff9500);
+  border-radius: 50px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  display: none;
+  animation: fireGlow 0.8s ease infinite alternate;
+}
+.score-card .streak.show { display: block; }
+@keyframes fireGlow {
+  from { box-shadow: 0 0 10px #ff5500; }
+  to { box-shadow: 0 0 25px #ffaa00; }
+}
+
+.game-main { display: flex; flex-direction: column; align-items: center; gap: 25px; flex: 1; }
+
+.wheel-container { position: relative; width: min(380px, 75vw); height: min(380px, 75vw); }
+.wheel {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-pink), var(--neon-purple), var(--neon-cyan),
+    var(--neon-green), var(--neon-yellow), var(--neon-pink)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 0 60px rgba(255, 45, 149, 0.6), inset 0 0 60px rgba(0, 0, 0, 0.5);
+  transition: transform 4s cubic-bezier(0.17, 0.67, 0.16, 0.99);
+}
+.wheel-inner {
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a0533, #0a0118);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid white;
+  box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.2);
+}
+.letter-display {
+  font-size: clamp(5rem, 16vw, 11rem);
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 20px var(--neon-cyan));
+}
+.wheel-pointer {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 25px solid transparent;
+  border-right: 25px solid transparent;
+  border-top: 40px solid var(--neon-yellow);
+  filter: drop-shadow(0 0 10px var(--neon-yellow));
+  z-index: 10;
+}
+.category-card {
+  background: linear-gradient(135deg, rgba(255, 45, 149, 0.2), rgba(0, 240, 255, 0.2));
+  backdrop-filter: blur(10px);
+  border: 3px solid var(--neon-cyan);
+  border-radius: 20px;
+  padding: 25px 40px;
+  text-align: center;
+  min-width: min(500px, 90vw);
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.5);
+  animation: cardFlip 0.6s ease;
+}
+@keyframes cardFlip {
+  from { transform: rotateX(90deg); opacity: 0; }
+  to { transform: rotateX(0); opacity: 1; }
+}
+.category-label {
+  font-size: 0.9rem;
+  color: var(--neon-cyan);
+  letter-spacing: 0.3em;
+  margin-bottom: 10px;
+}
+.category-text {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  color: white;
+  text-shadow: 0 0 20px var(--neon-pink);
+}
+.timer-ring { position: relative; width: 120px; height: 120px; }
+.timer-ring svg { transform: rotate(-90deg); }
+.timer-ring circle { fill: none; stroke-width: 10; }
+.timer-ring .bg { stroke: rgba(255, 255, 255, 0.1); }
+.timer-ring .progress {
+  stroke: var(--neon-green);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+  filter: drop-shadow(0 0 10px currentColor);
+}
+.timer-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: bold;
+}
+.action-buttons { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+.player-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+.player-btn {
+  background: rgba(0, 240, 255, 0.15);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 15px;
+  padding: 15px 25px;
+  color: white;
+  font-size: 1.1rem;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s;
+}
+.player-btn:hover { background: rgba(0, 240, 255, 0.3); transform: translateY(-2px); box-shadow: 0 0 20px var(--neon-cyan); }
+.player-btn .avatar { font-size: 1.5rem; }
+.bonus-badge {
+  display: inline-block;
+  background: var(--neon-yellow);
+  color: #000;
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  margin-left: 10px;
+  font-weight: bold;
+  animation: badgePulse 1s ease infinite;
+}
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.winner-text {
+  font-size: clamp(3rem, 12vw, 10rem);
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--neon-yellow), var(--neon-pink), var(--neon-purple));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: winnerBounce 1s ease infinite alternate;
+  margin-bottom: 20px;
+}
+@keyframes winnerBounce {
+  from { transform: scale(1) rotate(-2deg); }
+  to { transform: scale(1.05) rotate(2deg); }
+}
+.winner-avatar { font-size: clamp(5rem, 15vw, 12rem); margin: 20px 0; animation: avatarFloat 2s ease infinite alternate; }
+@keyframes avatarFloat {
+  from { transform: translateY(0); }
+  to { transform: translateY(-20px); }
+}
+.winner-name {
+  font-size: clamp(2rem, 6vw, 4rem);
+  color: var(--neon-cyan);
+  text-shadow: 0 0 30px var(--neon-cyan);
+  margin-bottom: 10px;
+}
+.winner-score {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  color: var(--neon-yellow);
+  margin-bottom: 30px;
+}
+#confetti-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+.flash {
+  position: fixed;
+  inset: 0;
+  background: white;
+  pointer-events: none;
+  z-index: 99;
+  opacity: 0;
+}
+.flash.active { animation: flashAnim 0.3s ease; }
+@keyframes flashAnim {
+  0% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+<div class="flash" id="flash"></div>
+
+<!-- ============ SETUP SCREEN ============ -->
+<div class="screen active" id="setup-screen">
+  <h1 class="title">PIM PAM PET</h1>
+  <div class="subtitle">⚡ ARCADE EDITION ⚡</div>
+
+  <div class="setup-card">
+    <div class="input-row">
+      <input type="text" id="player-name-input" placeholder="ENTER PLAYER NAME" maxlength="15">
+      <button class="btn btn-cyan" id="add-player-btn">ADD</button>
+    </div>
+
+    <div class="player-list" id="player-list"></div>
+
+    <div class="settings">
+      <div class="setting">
+        <label>TARGET SCORE</label>
+        <input type="number" id="target-score" value="1000" min="100" step="100">
+      </div>
+      <div class="setting">
+        <label>ROUND TIME (SEC)</label>
+        <input type="number" id="round-time" value="30" min="10" max="120">
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+      <button class="btn btn-green btn-big" id="start-game-btn" disabled>START GAME</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ GAME SCREEN ============ -->
+<div class="screen" id="game-screen">
+  <div class="scoreboard" id="scoreboard"></div>
+
+  <div class="game-main">
+    <div class="wheel-container">
+      <div class="wheel-pointer"></div>
+      <div class="wheel" id="wheel">
+        <div class="wheel-inner">
+          <div class="letter-display" id="letter-display">?</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="category-area"></div>
+
+    <div class="timer-ring" id="timer-ring" style="display:none;">
+      <svg width="120" height="120">
+        <circle class="bg" cx="60" cy="60" r="52"></circle>
+        <circle class="progress" id="timer-progress" cx="60" cy="60" r="52"
+                stroke-dasharray="326.7" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="timer-text" id="timer-text">30</div>
+    </div>
+
+    <div class="action-buttons" id="action-buttons"></div>
+    <div class="player-buttons" id="player-buttons"></div>
+  </div>
+</div>
+
+<!-- ============ WINNER SCREEN ============ -->
+<div class="screen" id="winner-screen">
+  <div class="winner-text">WINNER!</div>
+  <div class="winner-avatar" id="winner-avatar">🏆</div>
+  <div class="winner-name" id="winner-name">—</div>
+  <div class="winner-score" id="winner-score">— PTS</div>
+  <button class="btn btn-cyan btn-big" id="play-again-btn">PLAY AGAIN</button>
+</div>
+
+<script>
+// ============================================================
+// CATEGORIES — universal + Filipino flavor 🇵🇭
+// ============================================================
+const CATEGORIES = [
+  "An animal","A fruit","A vegetable","A country","A city","A movie title",
+  "A famous person","A sport","A musical instrument","A color","A piece of clothing",
+  "Something in the kitchen","Something at school","A profession","A car brand",
+  "A type of food","A drink","A board game","A video game","A cartoon character",
+  "A superhero","A Disney movie","A song title","A band or artist","A book title",
+  "A mobile app","A type of weather","A body part","A type of bird","A flower",
+  "A tree","A hobby","A dance move","A holiday","A breakfast food","A dessert",
+  "A pizza topping","An ice cream flavor","A language","A capital city","An island",
+  "A type of dog","Something cold","Something hot","Something round","Something soft",
+  "Something at the beach","Something in the bathroom","Something in your bag",
+  "A reason to be late","A type of shoe","A wild animal","A sea creature","An insect",
+  "A YouTube channel","A celebrity first name","A boy's name","A girl's name",
+  "A type of car","Something in space","A historical figure","A type of cheese",
+  // Filipino flavor
+  "A Filipino dish","A Filipino island or province","A Filipino celebrity",
+  "A Filipino city","A Tagalog word","A Filipino snack","An OPM artist",
+  "A Filipino actor or actress","Something at a Filipino fiesta",
+  "A Filipino dessert","A Filipino fruit","A street food in Manila",
+];
+
+const LETTERS = "ABCDEFGHIJKLMNOPRSTUW".split("");
+const RARE_LETTERS = "QVXYZ".split("");
+const AVATARS = ["🦊","🐼","🦁","🐯","🐸","🐙","🦄","🐲","🦖","🐺","🦅","🦉","🐧","🐨","🐵","🦝","🐰","🐹","🐶","🐱"];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  players: [],
+  targetScore: 1000,
+  roundTime: 30,
+  currentLetter: null,
+  currentCategory: null,
+  isRareLetter: false,
+  roundActive: false,
+  timerInterval: null,
+  roundStartTime: 0,
+  usedCategories: [],
+  wheelRotation: 0,
+};
+
+// ============================================================
+// AUDIO (Web Audio API — synthesized, no files)
+// ============================================================
+let audioCtx;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playTone(freq, duration, type='sine', volume=0.15) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+const soundTick = () => playTone(800, 0.05, 'square', 0.08);
+const soundDing = () => { playTone(880, 0.15, 'sine', 0.2); setTimeout(() => playTone(1320, 0.3, 'sine', 0.2), 100); };
+const soundScore = () => {
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => playTone(f, 0.12, 'square', 0.18), i * 80));
+};
+const soundBuzzer = () => playTone(150, 0.3, 'sawtooth', 0.2);
+const soundWinner = () => {
+  [523, 659, 784, 1047, 1319, 1568].forEach((n, i) => setTimeout(() => playTone(n, 0.2, 'square', 0.2), i * 120));
+};
+
+// ============================================================
+// SETUP SCREEN
+// ============================================================
+const playerNameInput = document.getElementById('player-name-input');
+const playerListEl = document.getElementById('player-list');
+const startGameBtn = document.getElementById('start-game-btn');
+
+function addPlayer() {
+  const name = playerNameInput.value.trim();
+  if (!name || state.players.length >= 10) return;
+  const used = state.players.map(p => p.avatar);
+  const available = AVATARS.filter(a => !used.includes(a));
+  const avatar = available[Math.floor(Math.random() * available.length)] || AVATARS[0];
+  state.players.push({
+    id: 'p' + Date.now() + Math.floor(Math.random() * 10000),
+    name, avatar, score: 0, streak: 0, scoredThisRound: false,
+  });
+  playerNameInput.value = '';
+  renderPlayerList();
+  initAudio();
+  playTone(660, 0.1, 'square');
+}
+function removePlayer(id) {
+  state.players = state.players.filter(p => p.id !== id);
+  renderPlayerList();
+}
+function renderPlayerList() {
+  playerListEl.innerHTML = state.players.map(p => `
+    <div class="player-chip">
+      <span class="avatar">${p.avatar}</span>
+      <span>${escapeHtml(p.name)}</span>
+      <button class="remove" data-id="${p.id}">×</button>
+    </div>
+  `).join('');
+  playerListEl.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', () => removePlayer(btn.dataset.id));
+  });
+  startGameBtn.disabled = state.players.length < 2;
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('add-player-btn').addEventListener('click', addPlayer);
+playerNameInput.addEventListener('keypress', e => { if (e.key === 'Enter') addPlayer(); });
+
+startGameBtn.addEventListener('click', () => {
+  state.targetScore = parseInt(document.getElementById('target-score').value) || 1000;
+  state.roundTime = parseInt(document.getElementById('round-time').value) || 30;
+  startGame();
+});
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function startGame() {
+  state.players.forEach(p => { p.score = 0; p.streak = 0; p.scoredThisRound = false; });
+  state.usedCategories = [];
+  showScreen('game-screen');
+  renderScoreboard();
+  resetRound();
+}
+
+function renderScoreboard() {
+  const maxScore = Math.max(...state.players.map(p => p.score));
+  const sb = document.getElementById('scoreboard');
+  sb.innerHTML = state.players.map(p => `
+    <div class="score-card ${p.score === maxScore && maxScore > 0 ? 'leader' : ''}" data-id="${p.id}">
+      <span class="avatar">${p.avatar}</span>
+      <div class="info">
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="points">${p.score}</div>
+      </div>
+      <span class="streak ${p.streak >= 3 ? 'show' : ''}">🔥 ${p.streak}</span>
+    </div>
+  `).join('');
+}
+
+function resetRound() {
+  state.currentLetter = null;
+  state.currentCategory = null;
+  state.roundActive = false;
+  document.getElementById('letter-display').textContent = '?';
+  document.getElementById('category-area').innerHTML = '';
+  document.getElementById('timer-ring').style.display = 'none';
+  document.getElementById('player-buttons').innerHTML = '';
+  document.getElementById('action-buttons').innerHTML = '<button class="btn btn-yellow btn-big" id="spin-btn">🎰 SPIN</button>';
+  document.getElementById('spin-btn').addEventListener('click', spin);
+}
+
+function spin() {
+  initAudio();
+  document.getElementById('spin-btn').disabled = true;
+
+  const useRare = Math.random() < 0.15;
+  const pool = useRare ? RARE_LETTERS : LETTERS;
+  const letter = pool[Math.floor(Math.random() * pool.length)];
+  state.isRareLetter = useRare;
+
+  const wheel = document.getElementById('wheel');
+  state.wheelRotation += 360 * (5 + Math.random() * 3);
+  wheel.style.transform = `rotate(${state.wheelRotation}deg)`;
+
+  let ticks = 0;
+  const tickInterval = setInterval(() => {
+    soundTick();
+    ticks++;
+    if (ticks > 25) clearInterval(tickInterval);
+  }, 150);
+
+  setTimeout(() => {
+    clearInterval(tickInterval);
+    state.currentLetter = letter;
+    document.getElementById('letter-display').textContent = letter;
+    soundDing();
+    flashScreen();
+    revealCategory();
+  }, 4000);
+}
+
+function revealCategory() {
+  let available = CATEGORIES.filter(c => !state.usedCategories.includes(c));
+  if (available.length === 0) { state.usedCategories = []; available = CATEGORIES; }
+  const category = available[Math.floor(Math.random() * available.length)];
+  state.usedCategories.push(category);
+  state.currentCategory = category;
+
+  document.getElementById('category-area').innerHTML = `
+    <div class="category-card">
+      <div class="category-label">CATEGORY</div>
+      <div class="category-text">${category}${state.isRareLetter ? '<span class="bonus-badge">2× RARE!</span>' : ''}</div>
+    </div>
+  `;
+
+  startTimer();
+  showPlayerButtons();
+}
+
+function startTimer() {
+  state.roundStartTime = Date.now();
+  state.roundActive = true;
+  state.players.forEach(p => p.scoredThisRound = false);
+
+  const ring = document.getElementById('timer-ring');
+  ring.style.display = 'block';
+  const text = document.getElementById('timer-text');
+  const progress = document.getElementById('timer-progress');
+  const circumference = 2 * Math.PI * 52;
+
+  function update() {
+    const elapsed = (Date.now() - state.roundStartTime) / 1000;
+    const remaining = Math.max(0, state.roundTime - elapsed);
+    text.textContent = Math.ceil(remaining);
+    const ratio = remaining / state.roundTime;
+    progress.style.strokeDashoffset = circumference * (1 - ratio);
+    if (ratio > 0.5) progress.style.stroke = 'var(--neon-green)';
+    else if (ratio > 0.25) progress.style.stroke = 'var(--neon-yellow)';
+    else progress.style.stroke = 'var(--neon-pink)';
+
+    if (remaining <= 0) {
+      clearInterval(state.timerInterval);
+      timesUp();
+    }
+  }
+  update();
+  state.timerInterval = setInterval(update, 100);
+}
+
+function timesUp() {
+  if (!state.roundActive) return;
+  state.roundActive = false;
+  soundBuzzer();
+  document.getElementById('player-buttons').innerHTML = '';
+  document.getElementById('action-buttons').innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-size:2rem; color:var(--neon-pink); text-shadow:0 0 20px var(--neon-pink); margin-bottom:15px;">⏰ TIME'S UP!</div>
+      <button class="btn btn-cyan btn-big" id="next-btn">NEXT ROUND →</button>
+    </div>
+  `;
+  state.players.forEach(p => { if (!p.scoredThisRound) p.streak = 0; });
+  renderScoreboard();
+  document.getElementById('next-btn').addEventListener('click', () => {
+    if (!checkWinner()) resetRound();
+  });
+}
+
+function showPlayerButtons() {
+  const container = document.getElementById('player-buttons');
+  container.innerHTML = state.players.map(p => `
+    <button class="player-btn" data-id="${p.id}">
+      <span class="avatar">${p.avatar}</span>
+      <span>${escapeHtml(p.name)}</span>
+    </button>
+  `).join('') + '<button class="player-btn" id="skip-btn" style="border-color:var(--neon-pink)">⏭️ NO ONE</button>';
+
+  container.querySelectorAll('.player-btn[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => awardPoint(btn.dataset.id));
+  });
+  document.getElementById('skip-btn').addEventListener('click', skipRound);
+}
+
+function awardPoint(playerId) {
+  if (!state.roundActive) return;
+  state.roundActive = false;
+  clearInterval(state.timerInterval);
+
+  const player = state.players.find(p => p.id === playerId);
+  if (!player) return;
+
+  const elapsed = (Date.now() - state.roundStartTime) / 1000;
+  let points = 100;
+  let breakdown = ['+100 base'];
+
+  if (elapsed < 3) { points += 100; breakdown.push('+100 LIGHTNING'); }
+  else if (elapsed < 6) { points += 50; breakdown.push('+50 fast'); }
+
+  if (state.isRareLetter) { points *= 2; breakdown.push('×2 rare letter'); }
+
+  player.streak++;
+  if (player.streak >= 5) { points *= 3; breakdown.push('×3 ON FIRE'); }
+  else if (player.streak >= 3) { points *= 2; breakdown.push('×2 streak'); }
+
+  player.score += points;
+  player.scoredThisRound = true;
+
+  state.players.forEach(p => { if (p.id !== playerId) p.streak = 0; });
+
+  soundScore();
+  fireConfetti();
+  flashScreen();
+  renderScoreboard();
+
+  const card = document.querySelector(`.score-card[data-id="${playerId}"]`);
+  if (card) {
+    card.classList.remove('score-pop');
+    void card.offsetWidth;
+    card.classList.add('score-pop');
+  }
+
+  document.getElementById('player-buttons').innerHTML = '';
+  document.getElementById('action-buttons').innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-size:2.5rem; color:var(--neon-yellow); text-shadow:0 0 30px var(--neon-yellow); margin-bottom:10px;">
+        +${points} POINTS!
+      </div>
+      <div style="font-size:1rem; color:var(--neon-cyan); margin-bottom:20px; letter-spacing:0.1em;">
+        ${breakdown.join(' • ')}
+      </div>
+      <button class="btn btn-cyan btn-big" id="next-btn">NEXT ROUND →</button>
+    </div>
+  `;
+  document.getElementById('timer-ring').style.display = 'none';
+  document.getElementById('next-btn').addEventListener('click', () => {
+    if (!checkWinner()) resetRound();
+  });
+}
+
+function skipRound() {
+  if (!state.roundActive) return;
+  state.roundActive = false;
+  clearInterval(state.timerInterval);
+  state.players.forEach(p => { p.streak = 0; });
+  renderScoreboard();
+  resetRound();
+}
+
+function checkWinner() {
+  const winner = state.players.find(p => p.score >= state.targetScore);
+  if (winner) { showWinner(winner); return true; }
+  return false;
+}
+
+function showWinner(winner) {
+  showScreen('winner-screen');
+  document.getElementById('winner-avatar').textContent = winner.avatar;
+  document.getElementById('winner-name').textContent = winner.name;
+  document.getElementById('winner-score').textContent = winner.score + ' PTS';
+  soundWinner();
+  const burst = setInterval(fireConfetti, 600);
+  setTimeout(() => clearInterval(burst), 6000);
+}
+
+document.getElementById('play-again-btn').addEventListener('click', () => location.reload());
+
+// ============================================================
+// CONFETTI
+// ============================================================
+const confettiCanvas = document.getElementById('confetti-canvas');
+const cctx = confettiCanvas.getContext('2d');
+let confettiParticles = [];
+
+function resizeCanvas() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const confettiColors = ['#ff2d95', '#00f0ff', '#b537f2', '#fff200', '#39ff14'];
+
+function fireConfetti() {
+  for (let i = 0; i < 100; i++) {
+    confettiParticles.push({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+      vx: (Math.random() - 0.5) * 22,
+      vy: (Math.random() - 0.5) * 22 - 6,
+      size: Math.random() * 8 + 4,
+      color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+      rotation: Math.random() * 360,
+      vr: (Math.random() - 0.5) * 20,
+      life: 1,
+    });
+  }
+}
+
+function updateConfetti() {
+  cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  confettiParticles = confettiParticles.filter(p => p.life > 0);
+  confettiParticles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.5;
+    p.rotation += p.vr;
+    p.life -= 0.012;
+    cctx.save();
+    cctx.translate(p.x, p.y);
+    cctx.rotate(p.rotation * Math.PI / 180);
+    cctx.globalAlpha = p.life;
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+    cctx.restore();
+  });
+  requestAnimationFrame(updateConfetti);
+}
+updateConfetti();
+
+function flashScreen() {
+  const f = document.getElementById('flash');
+  f.classList.remove('active');
+  void f.offsetWidth;
+  f.classList.add('active');
+}
+</script>
+
+</body>
+</html>
