@@ -777,8 +777,70 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
 .winner-score {
   font-size: clamp(1.5rem, 4vw, 2.5rem);
   color: var(--neon-yellow);
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
+
+/* TOURNAMENT BOARD */
+.tournament-board {
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--neon-yellow);
+  border-radius: 18px;
+  padding: 18px 25px;
+  margin: 15px auto 25px auto;
+  max-width: 420px;
+  width: 90vw;
+  box-shadow: 0 0 30px rgba(255, 242, 0, 0.3);
+}
+.tournament-label {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--neon-yellow);
+  letter-spacing: 0.25em;
+  margin-bottom: 12px;
+  text-shadow: 0 0 12px var(--neon-yellow);
+  font-family: 'Courier New', monospace;
+}
+.tournament-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: 1.15rem;
+  border-radius: 8px;
+}
+.tournament-row.top {
+  background: rgba(255, 242, 0, 0.12);
+  border: 1px solid rgba(255, 242, 0, 0.4);
+  margin-bottom: 4px;
+}
+.tournament-row:not(:last-child) {
+  margin-bottom: 2px;
+}
+.tournament-player { display: flex; align-items: center; gap: 10px; }
+.tournament-player .av { font-size: 1.5rem; }
+.tournament-wins {
+  color: var(--neon-yellow);
+  font-weight: bold;
+  font-size: 1.4rem;
+  text-shadow: 0 0 12px var(--neon-yellow);
+  font-family: 'Courier New', monospace;
+}
+
+/* CROWN BADGE on score cards */
+.score-card .crown {
+  position: absolute;
+  top: -12px;
+  left: -10px;
+  background: linear-gradient(135deg, var(--neon-yellow), #f39c12);
+  color: #000;
+  border-radius: 50px;
+  padding: 3px 9px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  display: none;
+  box-shadow: 0 0 15px rgba(255, 242, 0, 0.7);
+}
+.score-card .crown.show { display: block; }
 
 #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
 .flash { position: fixed; inset: 0; background: white; pointer-events: none; z-index: 99; opacity: 0; }
@@ -917,7 +979,8 @@ input:focus { border-color: var(--neon-pink); box-shadow: 0 0 20px var(--neon-pi
   <div class="winner-avatar" id="winner-avatar">🏆</div>
   <div class="winner-name" id="winner-name">—</div>
   <div class="winner-score" id="winner-score">— PTS</div>
-  <button class="btn btn-cyan btn-big" id="play-again-btn" style="max-width:300px;">NEW GAME</button>
+  <div id="tournament-board-container"></div>
+  <div id="winner-action-area"></div>
 </div>
 
 <!-- Firebase SDK (compat for inline scripts) -->
@@ -962,9 +1025,31 @@ const CATEGORIES = [
   "Something red", "Something yellow", "Something blue",
   "Something round", "Something soft", "Something cold", "Something hot",
   "Sport", "Job", "Car brand", "Phone brand",
-  "Filipino food", "Filipino fruit", "Filipino snack", "Filipino dessert",
-  "Filipino drink", "Filipino island", "Filipino city",
-  "Filipino actor", "Filipino singer", "Tagalog word",
+  // Filipino food 🍛
+  "Filipino food", "Filipino fruit", "Filipino vegetable", "Filipino bread",
+  "Filipino snack", "Filipino dessert", "Filipino drink", "Filipino sauce",
+  "Filipino soup", "Filipino noodle dish", "Filipino rice dish",
+  "Filipino breakfast", "Filipino BBQ", "Filipino kakanin (rice cake)",
+  "Filipino street food", "Filipino ice cream flavor", "Filipino fast food chain",
+  "Filipino ulam", "Filipino merienda",
+  // Filipino places 🏝️
+  "Filipino island", "Filipino city", "Filipino province",
+  "Filipino mountain", "Filipino beach", "Filipino mall",
+  "Filipino tourist spot", "Filipino region",
+  // Filipino people 🎤
+  "Filipino actor", "Filipino actress", "Filipino singer",
+  "Filipino comedian", "Filipino sports star", "Filipino president",
+  "Filipino historical hero", "OPM artist",
+  // Filipino culture 🎭
+  "Filipino festival", "Filipino dance", "Filipino game",
+  "Filipino mythical creature", "Filipino transportation",
+  "Filipino TV show", "Filipino movie", "Filipino Christmas tradition",
+  "Filipino musical instrument",
+  // Filipino nature 🌺
+  "Filipino animal", "Filipino flower", "Filipino tree",
+  // Filipino language 🗣️
+  "Tagalog word", "Filipino expression", "Filipino word for family",
+  "Filipino name",
 ];
 const LETTERS = "ABCDEFGHIJKLMNOPRSTUW".split("");
 const RARE_LETTERS = "QVXYZ".split("");
@@ -1222,6 +1307,7 @@ function renderHostScoreboard(players) {
   const maxScore = Math.max(...list.map(p => p.score || 0));
   document.getElementById('scoreboard').innerHTML = list.map(p => `
     <div class="score-card ${(p.score || 0) === maxScore && maxScore > 0 ? 'leader' : ''}" data-id="${p.id}">
+      <span class="crown ${(p.gamesWon || 0) > 0 ? 'show' : ''}">👑 ${p.gamesWon || 0}</span>
       <span class="avatar">${p.avatar}</span>
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
@@ -1432,8 +1518,12 @@ async function hostJudge(correct) {
     Object.keys(room.players || {}).forEach(id => {
       if (id !== buzzedId) updates[`players/${id}/streak`] = 0;
     });
-    updates['state'] = newScore >= room.targetScore ? 'winner' : 'roundEnd';
+    const isGameWinner = newScore >= room.targetScore;
+    updates['state'] = isGameWinner ? 'winner' : 'roundEnd';
     updates['lastWinner'] = { id: buzzedId, points: points, name: player.name, avatar: player.avatar };
+    if (isGameWinner) {
+      updates[`players/${buzzedId}/gamesWon`] = (player.gamesWon || 0) + 1;
+    }
 
     await db.ref(`rooms/${local.roomCode}`).update(updates);
 
@@ -1631,6 +1721,7 @@ async function joinRoom() {
     streak: 0,
     scoredThisRound: false,
     connected: true,
+    gamesWon: 0,
   });
 
   // Mark as disconnected if browser closes
@@ -1719,6 +1810,11 @@ function handlePlayerStateChange(room) {
   const me = (room.players || {})[local.myId];
   if (me) {
     document.getElementById('player-header-score').textContent = me.score || 0;
+  }
+
+  // Reset shownWinner when leaving winner state (allow next game's winner to show)
+  if (room.state !== 'winner' && local.shownWinner) {
+    local.shownWinner = false;
   }
 
   // Play sound on state transition (skip first time when prevPlayerState is null)
@@ -1898,26 +1994,90 @@ function renderMiniScoreboard(room) {
 }
 
 // ============================================================
-// SHARED — WINNER
+// SHARED — WINNER + TOURNAMENT
 // ============================================================
+function renderTournamentBoard(players) {
+  const sorted = Object.values(players).sort((a, b) => (b.gamesWon || 0) - (a.gamesWon || 0));
+  const topWins = sorted[0] ? (sorted[0].gamesWon || 0) : 0;
+  return `
+    <div class="tournament-board">
+      <div class="tournament-label">🏆 TOURNAMENT — GAMES WON</div>
+      ${sorted.map(p => `
+        <div class="tournament-row ${(p.gamesWon || 0) === topWins && topWins > 0 ? 'top' : ''}">
+          <span class="tournament-player"><span class="av">${p.avatar}</span> ${escapeHtml(p.name)}</span>
+          <span class="tournament-wins">${p.gamesWon || 0}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function showWinnerScreen(winner) {
   if (local.shownWinner) return;
   local.shownWinner = true;
   document.getElementById('winner-avatar').textContent = winner.avatar;
   document.getElementById('winner-name').textContent = winner.name;
   document.getElementById('winner-score').textContent = (winner.score || 0) + ' PTS';
+
+  // Tournament board
+  document.getElementById('tournament-board-container').innerHTML =
+    renderTournamentBoard((local.cachedRoom && local.cachedRoom.players) || {});
+
+  // Role-based action buttons
+  const actionArea = document.getElementById('winner-action-area');
+  if (local.role === 'host') {
+    actionArea.innerHTML = `
+      <button class="btn btn-cyan btn-big" id="play-again-btn" style="max-width:340px;">PLAY AGAIN</button>
+      <button class="btn" id="end-tournament-btn" style="max-width:340px; margin-top:12px; background:transparent; border:1px solid var(--neon-pink); color:var(--neon-pink); box-shadow:none; font-size:1rem; padding:12px 24px;">END TOURNAMENT</button>
+    `;
+    document.getElementById('play-again-btn').addEventListener('click', hostPlayAgain);
+    document.getElementById('end-tournament-btn').addEventListener('click', async () => {
+      if (confirm('End the tournament and return home?')) {
+        try { await db.ref(`rooms/${local.roomCode}`).remove(); } catch(e) {}
+        location.reload();
+      }
+    });
+  } else {
+    actionArea.innerHTML = `
+      <div style="text-align:center; color:var(--neon-cyan); font-family:'Courier New', monospace; letter-spacing:0.15em; padding:25px; font-size:0.95rem;">
+        ⏳ WAITING FOR HOST<br><span style="font-size:0.8rem; color:rgba(255,255,255,0.6); letter-spacing:0.1em;">Host can start a new game or end the tournament</span>
+      </div>
+    `;
+  }
+
   showScreen('winner-screen');
   soundWinner();
   const burst = setInterval(fireConfetti, 600);
   setTimeout(() => clearInterval(burst), 6000);
 }
 
-document.getElementById('play-again-btn').addEventListener('click', async () => {
-  if (local.roomCode && local.role === 'host') {
-    try { await db.ref(`rooms/${local.roomCode}`).remove(); } catch(e) {}
-  }
-  location.reload();
-});
+async function hostPlayAgain() {
+  const room = local.cachedRoom;
+  if (!room) return;
+  const updates = {
+    state: 'ready',
+    round: 0,
+    currentLetter: null,
+    currentCategory: null,
+    buzzedPlayer: null,
+    wrongBuzzers: null,
+    hasBonus: null,
+    roundStartTime: null,
+    isRareLetter: false,
+    lastWinner: null,
+  };
+  // Reset per-game state for all players, but KEEP gamesWon
+  Object.keys(room.players || {}).forEach(id => {
+    updates[`players/${id}/score`] = 0;
+    updates[`players/${id}/streak`] = 0;
+    updates[`players/${id}/scoredThisRound`] = false;
+  });
+  await db.ref(`rooms/${local.roomCode}`).update(updates);
+  local.shownWinner = false;
+  local.prevBuzzedPlayer = null;
+  showScreen('host-game-screen');
+  showHostReadyToSpin();
+}
 </script>
 
 </body>
